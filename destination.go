@@ -1,4 +1,4 @@
-package connectorname
+package influxdb
 
 //go:generate paramgen -output=paramgen_dest.go DestinationConfig
 
@@ -6,13 +6,14 @@ import (
 	"context"
 	"fmt"
 
+	influxdb3 "github.com/InfluxCommunity/influxdb3-go/influxdb3"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 )
 
 type Destination struct {
 	sdk.UnimplementedDestination
-
 	config DestinationConfig
+	client *influxdb3.Client
 }
 
 type DestinationConfig struct {
@@ -49,6 +50,7 @@ func (d *Destination) Configure(ctx context.Context, cfg map[string]string) erro
 	if err != nil {
 		return fmt.Errorf("invalid config: %w", err)
 	}
+
 	return nil
 }
 
@@ -56,20 +58,40 @@ func (d *Destination) Open(_ context.Context) error {
 	// Open is called after Configure to signal the plugin it can prepare to
 	// start writing records. If needed, the plugin should open connections in
 	// this function.
+	client, err := influxdb3.New(influxdb3.ClientConfig{
+		Host:     d.config.InfluxDBHost,
+		Token:    d.config.InfluxDBToken,
+		Database: d.config.InfluxDBDatabase,
+	})
+	if err != nil {
+		return err
+	}
+	d.client = client
 	return nil
 }
 
-func (d *Destination) Write(_ context.Context, _ []sdk.Record) (int, error) {
+func (d *Destination) Write(context context.Context, records []sdk.Record) (int, error) {
 	// Write writes len(r) records from r to the destination right away without
 	// caching. It should return the number of records written from r
 	// (0 <= n <= len(r)) and any error encountered that caused the write to
 	// stop early. Write must return a non-nil error if it returns n < len(r).
-	return 0, nil
+	for i, r := range records {
+		fmt.Printf("Record %d: %v\n", i, r)
+		err := d.client.Write(context, r.Payload.After.Bytes())
+		if err != nil {
+			return i, fmt.Errorf("failed to write record to influx record index: %v, error: %w", i, err)
+		}
+	}
+
+	return len(records), nil
 }
 
 func (d *Destination) Teardown(_ context.Context) error {
 	// Teardown signals to the plugin that all records were written and there
 	// will be no more calls to any other function. After Teardown returns, the
 	// plugin should be ready for a graceful shutdown.
+	if d.client != nil {
+		return d.client.Close()
+	}
 	return nil
 }

@@ -1,0 +1,6 @@
+weather,location=us-midwest temperature_str="too hot/cold"
+weather,location=us-midwest temperature_str="too hot\cold"
+weather,location=us-midwest temperature_str="too hot\\cold"
+weather,location=us-midwest temperature_str="too hot\\\cold"
+weather,location=us-midwest temperature_str="too hot\\\\cold"
+weather,location=us-midwest temperature_str="too hot\\\\\cold"
